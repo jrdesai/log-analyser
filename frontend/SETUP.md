@@ -46,7 +46,7 @@ The built files will be in the `dist` directory.
 ## Project Structure
 
 ```
-Log Analyzer UI/
+Log Analyzer/
 ├── src/
 │   ├── components/
 │   │   ├── ui/              # shadcn/ui components

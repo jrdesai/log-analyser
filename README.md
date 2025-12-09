@@ -49,7 +49,7 @@ A modern, AI-powered log analysis web application built with React, TypeScript, 
 ## 📁 Project Structure
 
 ```
-Log Analyzer UI/
+Log Analyzer/
 ├── frontend/                    # React + TypeScript frontend
 │   ├── src/
 │   │   ├── components/
