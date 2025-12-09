@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import EmptyState from './EmptyState';
 import SettingsDialog from './SettingsDialog';
 import FilterChips, { Filter } from './FilterChips';
+import AdvancedFiltersPanel from './AdvancedFiltersPanel';
 import CommandPalette from './CommandPalette';
 import SystemHealthBanner from './SystemHealthBanner';
 import StatisticsCards from './StatisticsCards';
@@ -19,6 +20,8 @@ import DashboardTab from './DashboardTab';
 import LiveLogsTab from './LiveLogsTab';
 import MiniSidebar from './MiniSidebar';
 import LogSourceConfig, { LogSourceType, LogSourceConfig as LogSourceConfigType } from './LogSourceConfig';
+import { AdvancedFilter } from '@/types/filters';
+import { applyAdvancedFilters, convertLegacyFiltersToAdvanced, convertAdvancedFiltersToLegacy } from '@/lib/filterUtils';
 import {
   loadLogSourceConfig,
   saveLogSourceConfig,
@@ -65,6 +68,8 @@ const LogAnalyzer = () => {
 
   // Filter state
   const [filters, setFilters] = useState<Filter[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilter[]>([]);
+  const [filtersPanelCollapsed, setFiltersPanelCollapsed] = useState(false);
 
   // Live streaming state
   const [isLive, setIsLive] = useState(false);
@@ -307,10 +312,37 @@ const LogAnalyzer = () => {
     setFilters(prev => prev.filter(f => 
       !(f.type === filterToRemove.type && f.value === filterToRemove.value)
     ));
+    // Also remove from advanced filters if it exists
+    setAdvancedFilters(prev => prev.filter(f => 
+      !(f.field === filterToRemove.type && f.value === filterToRemove.value)
+    ));
   };
 
   const handleClearAllFilters = () => {
     setFilters([]);
+    setAdvancedFilters([]);
+  };
+
+  // Sync legacy filters with advanced filters
+  useEffect(() => {
+    if (filters.length > 0) {
+      const converted = convertLegacyFiltersToAdvanced(filters);
+      // Merge with existing advanced filters, avoiding duplicates
+      setAdvancedFilters(prev => {
+        const existing = prev.filter(f => 
+          !converted.some(c => c.field === f.field && c.value === f.value)
+        );
+        return [...existing, ...converted];
+      });
+    }
+  }, [filters]);
+
+  // Handle advanced filters change
+  const handleAdvancedFiltersChange = (newFilters: AdvancedFilter[]) => {
+    setAdvancedFilters(newFilters);
+    // Sync back to legacy filters for backward compatibility
+    const legacyFilters = convertAdvancedFiltersToLegacy(newFilters);
+    setFilters(legacyFilters);
   };
 
   const handleNavigate = (section: string) => {
@@ -424,18 +456,31 @@ const LogAnalyzer = () => {
         )}
 
         {/* Tabs Navigation */}
-        <div className="border-b px-6 bg-card">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
-              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-              <TabsTrigger value="live-logs">Live Logs</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div 
+          className="border-b bg-card relative"
+          style={{
+            backgroundColor: 'hsl(var(--card))',
+            paddingRight: filtersPanelCollapsed ? '48px' : '320px',
+          }}
+        >
+          <div className="px-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-3">
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                <TabsTrigger value="live-logs">Live Logs</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-auto bg-background">
+        <div 
+          className="flex-1 overflow-auto bg-background transition-all duration-300"
+          style={{
+            marginRight: filtersPanelCollapsed ? '48px' : '320px',
+          }}
+        >
           <div className="container mx-auto px-6 py-6 h-full">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
               {/* Dashboard Tab */}
@@ -452,7 +497,7 @@ const LogAnalyzer = () => {
                     onTogglePause={handleTogglePause}
                     onToggleAutoScroll={setAutoScroll}
                     onSwitchToLiveLogs={() => setActiveTab('live-logs')}
-                    logs={results.logs}
+                    logs={applyAdvancedFilters(results.logs, advancedFilters)}
                   />
                 )}
               </TabsContent>
@@ -463,7 +508,7 @@ const LogAnalyzer = () => {
                   <>
                     {comparisonMode ? (
                       <LogComparison
-                        logs={results.logs}
+                        logs={applyAdvancedFilters(results.logs, advancedFilters)}
                         onClose={() => setComparisonMode(false)}
                       />
                     ) : (
@@ -483,7 +528,7 @@ const LogAnalyzer = () => {
                         onToggleLive={handleToggleLive}
                         onTogglePause={handleTogglePause}
                         onToggleAutoScroll={setAutoScroll}
-                        logs={results.logs}
+                        logs={applyAdvancedFilters(results.logs, advancedFilters)}
                         selectedLog={selectedLog}
                         onLogSelect={setSelectedLog}
                         onComparisonMode={() => setComparisonMode(true)}
@@ -545,6 +590,17 @@ const LogAnalyzer = () => {
           setActiveTab('live-logs');
         }}
       />
+
+      {/* Advanced Filters Panel */}
+      {results && (
+        <AdvancedFiltersPanel
+          filters={advancedFilters}
+          onFiltersChange={handleAdvancedFiltersChange}
+          logs={results.logs}
+          isCollapsed={filtersPanelCollapsed}
+          onToggleCollapse={() => setFiltersPanelCollapsed(!filtersPanelCollapsed)}
+        />
+      )}
     </div>
   );
 };
